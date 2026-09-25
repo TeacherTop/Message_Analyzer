@@ -27,9 +27,11 @@ def plot_clusters_umap(X_scaled, session_df):
     import umap
 
     reducer = umap.UMAP(
-        n_neighbors=15,
+        n_neighbors=min(15, max(2, len(X_scaled) - 1)),
         min_dist=0.1,
-        random_state=42
+        random_state=42,
+        low_memory=True,
+        n_jobs=1,
     )
 
     X_2d = reducer.fit_transform(X_scaled)
@@ -54,5 +56,4 @@ def plot_clusters_umap(X_scaled, session_df):
     buf.seek(0)
     img_b64 = base64.b64encode(buf.read()).decode("ascii")
     return img_b64
-
 

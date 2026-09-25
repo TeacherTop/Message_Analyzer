@@ -60,7 +60,9 @@ def get_topics_per_cluster(df_messages):
         vectorizer_model=vectorizer_model,
         language="multilingual",
         min_topic_size=5,
-        calculate_probabilities=True,
+        # The UI only displays topic labels and counts; the full probability
+        # matrix is unused and can consume substantial memory on hosted plans.
+        calculate_probabilities=False,
         # Биграммы помогают отличить "спокойной ночи" от просто "ночь"
         # но в данном случае они должны быть в одном контексте пожеланий
         n_gram_range=(1, 2)

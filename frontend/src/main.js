@@ -1,11 +1,11 @@
 import './style.css'
 
-const apiUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const apiUrl = 'http://127.0.0.1:8000'
 const app = document.querySelector('#app')
 
 app.innerHTML = `
   <main class="shell">
-    <header class="topbar"><a class="brand" href="/">Диалоги<span> / аналитика</span></a><span class="privacy">Файл обрабатывается на сервере и не сохраняется</span></header>
+    <header class="topbar"><a class="brand" href="/">Диалоги<span> / аналитика</span></a><span class="privacy">Файл остаётся на этом компьютере</span></header>
     <section class="intro">
       <p class="eyebrow">АНАЛИЗ TELEGRAM-ПЕРЕПИСКИ</p>
       <h1>Увидеть больше<br>в привычных диалогах.</h1>
@@ -16,7 +16,7 @@ app.innerHTML = `
       <div class="options"><label><input id="with-umap" type="checkbox" checked> Карта поведенческих кластеров</label><label><input id="with-topics" type="checkbox"> Семантические темы <span class="hint">дольше</span></label></div>
       <button id="submit" class="primary" type="submit">Проанализировать переписку <span>→</span></button>
       <p id="status" class="status" role="status"></p>
-      ${apiUrl ? '' : '<p class="config-note">Для публикации задайте в Vercel переменную VITE_API_URL с адресом Render API.</p>'}
+      <p class="config-note">Для анализа запусти локальный API командой <code>make api</code>. Данные не отправляются на Vercel.</p>
     </form>
     <section id="results" class="results" hidden></section>
     <footer>Ваш файл остаётся только на время обработки запроса.</footer>
@@ -55,14 +55,20 @@ form.addEventListener('submit', async (event) => {
   results.hidden = true
 
   try {
-    const response = await fetch(`${apiUrl}/upload-chat?${params}`, { method: 'POST', body })
+    const response = await fetch(`${apiUrl}/upload-chat?${params}`, {
+      method: 'POST',
+      body,
+      targetAddressSpace: 'loopback',
+    })
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.detail || 'Не удалось обработать файл')
     renderResults(payload)
     status.textContent = 'Готово. Файл обработан.'
     status.className = 'status success'
   } catch (error) {
-    status.textContent = error.message || 'Не удалось подключиться к API. Проверьте, что Render-сервис запущен.'
+    status.textContent = error.message === 'Failed to fetch'
+      ? 'Не удалось подключиться к локальному API. Запусти make api и разреши сайту доступ к локальной сети.'
+      : error.message || 'Не удалось обработать файл.'
     status.className = 'status error'
   } finally {
     button.disabled = false
