@@ -20,12 +20,12 @@
 ├── analytics/
 │   └── analytics.py              # базовая статистика
 ├── base/
-│   ├── main.py                   # FastAPI endpoint
+│   ├── main.py                   # FastAPI backend
 │   ├── parser.py                 # парсер Telegram JSON
 │   ├── sessionization.py         # разбиение на сессии
 │   ├── feature_engineering.py    # признаки сообщений и сессий
-│   ├── pipeline.py               # общий пайплайн обработки
-│   └── streamlit_app.py          # Streamlit UI
+│   └── pipeline.py               # общий пайплайн обработки
+├── frontend/                     # Vercel frontend
 ├── ML/
 │   ├── prepare_for_clustering.py # подготовка признаков
 │   └── clustering.py             # KMeans и UMAP
@@ -51,41 +51,39 @@ python -m pip install -r requirements.txt
 python -c "import nltk; nltk.download('stopwords')"
 ```
 
-## Быстрый запуск
+## Локальный запуск
 
-Основной сценарий запуска - один процесс Streamlit.
+Установите frontend-зависимости и запустите API и интерфейс в двух терминалах:
 
 ```bash
-source .venv/bin/activate
-make run
+make install
+npm --prefix frontend install
 ```
 
-Если `make` недоступен, запустите напрямую:
+Терминал 1 — FastAPI:
 
 ```bash
-source .venv/bin/activate
-streamlit run base/streamlit_app.py
-```
-
-После этого откройте Streamlit-адрес из терминала и загрузите JSON-файл экспорта Telegram.
-
-Семантические темы через BERTopic выключены по умолчанию, потому что это самая тяжелая часть обработки. Их можно включить в боковой панели приложения. UMAP-карту тоже можно выключить там же, если нужен более быстрый расчет.
-
-## Дополнительный API-режим
-
-FastAPI backend оставлен в проекте как дополнительный режим для будущего отдельного frontend или интеграций:
-
-```bash
-source .venv/bin/activate
 make api
 ```
 
-То же самое без `make`:
+Терминал 2 — frontend:
 
 ```bash
-source .venv/bin/activate
-uvicorn base.main:app --reload --host 127.0.0.1 --port 8000
+make frontend
 ```
+
+Для локальной работы задайте `VITE_API_URL=http://127.0.0.1:8000` в `frontend/.env.local`.
+
+## Деплой
+
+Проект рассчитан на два сервиса:
+
+- Render запускает FastAPI из корневого `render.yaml`.
+- Vercel собирает интерфейс из `frontend/` по корневому `vercel.json`.
+
+После создания Render Web Service добавьте в настройках Vercel переменную окружения `VITE_API_URL` со значением публичного адреса Render-сервиса, например `https://chat-analytics-api.onrender.com`. Затем запустите redeploy Vercel, чтобы адрес попал в сборку frontend.
+
+Проверить API можно по `/health`; интерактивная документация доступна по `/docs`.
 
 ## Формат входных данных
 
@@ -109,7 +107,7 @@ uvicorn base.main:app --reload --host 127.0.0.1 --port 8000
 
 ## Приватность данных
 
-Файлы реальных переписок не входят в репозиторий. Папка `Переписки/` добавлена в `.gitignore`, поэтому пользователь загружает свой Telegram JSON через интерфейс приложения.
+Файлы реальных переписок не входят в репозиторий. Загруженный JSON передаётся на Render для анализа и не записывается приложением на диск.
 
 ## Быстрая проверка пайплайна
 
@@ -123,7 +121,7 @@ python -c "import json; from base.pipeline import process_chat; data=json.load(o
 
 ## Текущие ограничения
 
-- BERTopic может сильно замедлять обработку больших переписок, поэтому в Streamlit он включается отдельно.
+- BERTopic может сильно замедлять обработку больших переписок, поэтому в интерфейсе он включается отдельно.
 - Количество кластеров KMeans сейчас фиксировано: `4`.
 - UMAP и KMeans используют фиксированные параметры, которые стоит адаптировать для маленьких чатов.
 - Медиа, стикеры и сообщения без текста попадают в общую статистику как сообщения с пустым текстом.
