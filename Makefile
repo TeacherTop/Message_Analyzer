@@ -1,4 +1,4 @@
-.PHONY: install frontend api
+.PHONY: install frontend api app
 
 install:
 	python -m pip install --upgrade pip
@@ -9,3 +9,9 @@ frontend:
 
 api:
 	uvicorn base.main:app --reload --host 127.0.0.1 --port 8000
+
+app: build
+	uvicorn base.main:app --host 127.0.0.1 --port 8000
+
+build:
+	npm --prefix frontend run build

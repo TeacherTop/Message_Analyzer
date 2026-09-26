@@ -13,8 +13,7 @@ def cluster_sessions(X_scaled, scaler, session_df):
     clusters = session_df.groupby("cluster").mean(numeric_only=True)
     amount = session_df["cluster"].value_counts()
 
-
-    return clusters, amount
+    return clusters, amount, session_df
 
 
 
@@ -56,4 +55,3 @@ def plot_clusters_umap(X_scaled, session_df):
     buf.seek(0)
     img_b64 = base64.b64encode(buf.read()).decode("ascii")
     return img_b64
-

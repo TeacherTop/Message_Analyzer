@@ -1,6 +1,7 @@
 import './style.css'
+import './topics.css'
 
-const apiUrl = 'http://127.0.0.1:8000'
+const apiUrl = ''
 const app = document.querySelector('#app')
 
 app.innerHTML = `
@@ -11,12 +12,15 @@ app.innerHTML = `
       <h1>Увидеть больше<br>в привычных диалогах.</h1>
       <p class="lead">Загрузите JSON-экспорт Telegram: покажем ритм общения, активность участников и поведенческие группы диалогов.</p>
     </section>
-    <form id="upload-form" class="upload-card">
+  <form id="upload-form" class="upload-card">
       <label class="dropzone" for="chat-file"><span class="file-icon">↑</span><strong id="file-name">Выберите JSON-файл переписки</strong><small>Экспорт Telegram · .json</small><input id="chat-file" type="file" accept="application/json,.json" required></label>
-      <div class="options"><label><input id="with-umap" type="checkbox" checked> Карта поведенческих кластеров</label><label><input id="with-topics" type="checkbox"> Семантические темы <span class="hint">дольше</span></label></div>
+      <div class="options">
+        <label><input id="with-semantic" type="checkbox" checked> Семантическая кластеризация</label>
+        <label><input id="with-behavior" type="checkbox" checked> Поведенческая кластеризация</label>
+      </div>
       <button id="submit" class="primary" type="submit">Проанализировать переписку <span>→</span></button>
       <p id="status" class="status" role="status"></p>
-      <p class="config-note">Для анализа запусти локальный API командой <code>make api</code>. Данные не отправляются на Vercel.</p>
+      <p class="config-note">Приложение работает на этом компьютере. Данные не отправляются в интернет.</p>
     </form>
     <section id="results" class="results" hidden></section>
     <footer>Ваш файл остаётся только на время обработки запроса.</footer>
@@ -35,22 +39,18 @@ fileInput.addEventListener('change', () => {
 form.addEventListener('submit', async (event) => {
   event.preventDefault()
   const file = fileInput.files[0]
-  if (!apiUrl) {
-    status.textContent = 'Сервис API пока не настроен. Добавьте VITE_API_URL в настройках Vercel.'
-    status.className = 'status error'
-    return
-  }
   if (!file) return
 
   const params = new URLSearchParams({
-    include_topics: String(document.querySelector('#with-topics').checked),
-    include_umap: String(document.querySelector('#with-umap').checked),
+    include_semantic: String(document.querySelector('#with-semantic').checked),
+    include_behavior: String(document.querySelector('#with-behavior').checked),
+    include_umap: String(document.querySelector('#with-behavior').checked),
   })
   const body = new FormData()
   body.append('file', file)
   button.disabled = true
   button.innerHTML = '<span class="spinner"></span> Анализируем…'
-  status.textContent = 'На больших переписках анализ может занять несколько минут.'
+  status.textContent = 'Обрабатываем переписку локально. На большом экспорте это может занять время.'
   status.className = 'status'
   results.hidden = true
 
@@ -58,7 +58,6 @@ form.addEventListener('submit', async (event) => {
     const response = await fetch(`${apiUrl}/upload-chat?${params}`, {
       method: 'POST',
       body,
-      targetAddressSpace: 'loopback',
     })
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.detail || 'Не удалось обработать файл')
@@ -67,7 +66,7 @@ form.addEventListener('submit', async (event) => {
     status.className = 'status success'
   } catch (error) {
     status.textContent = error.message === 'Failed to fetch'
-      ? 'Не удалось подключиться к локальному API. Запусти make api и разреши сайту доступ к локальной сети.'
+      ? 'Не удалось подключиться к приложению. Перезапусти его командой make app.'
       : error.message || 'Не удалось обработать файл.'
     status.className = 'status error'
   } finally {
@@ -83,8 +82,8 @@ function renderResults(data) {
   const activity = data.activity || {}
   const users = Object.entries(messages.messages_per_user || {}).sort((a, b) => b[1] - a[1])
   const maxUserCount = Math.max(1, ...users.map(([, count]) => count))
-  const clusters = Object.entries(data.amount || {}).sort((a, b) => Number(a[0]) - Number(b[0]))
-  const topics = Object.values(data.topics || {})
+  const clusters = data.behavior_clusters || []
+  const topics = data.topics || []
   const hours = Array.from({ length: 24 }, (_, hour) => [hour, activity.activity_by_hour?.[hour] || activity.activity_by_hour?.[String(hour)] || 0])
   const maxHourCount = Math.max(1, ...hours.map(([, count]) => count))
   const weekdays = Object.entries(activity.activity_by_weekday || {})
@@ -104,9 +103,9 @@ function renderResults(data) {
       <article class="panel"><p class="eyebrow">ДИАЛОГИ</p><h3>Как устроены сессии</h3><div class="facts"><div><span>В среднем сообщений</span><b>${number(sessions.avg_messages_per_session)}</b></div><div><span>Максимум в сессии</span><b>${format(sessions.max_messages_in_session)}</b></div><div><span>Средняя длительность</span><b>${duration(sessions.avg_session_duration_minutes)}</b></div><div><span>Чаще начинает</span><b>${escapeHtml(topEntry(sessions.session_starters))}</b></div></div></article>
     </div>
     <article class="panel"><p class="eyebrow">РИТМ ОБЩЕНИЯ</p><h3>Когда переписываются</h3><div class="activity-charts"><div><span class="chart-label">По часам</span><div class="hour-chart" role="img" aria-label="Активность сообщений по часам">${hours.map(([hour, count]) => `<span title="${hour}:00 · ${count} сообщ." style="height:${Math.max(3, Math.round(count / maxHourCount * 100))}%"></span>`).join('')}</div><div class="hour-labels"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div><div><span class="chart-label">По дням недели</span><div class="weekday-chart">${weekdays.map(([day, count]) => `<div><span>${weekdayNames[day] || escapeHtml(day)}</span><i><b style="width:${Math.round(count / maxWeekdayCount * 100)}%"></b></i><small>${format(count)}</small></div>`).join('')}</div></div></div></article>
-    ${clusters.length ? `<article class="panel cluster-panel"><p class="eyebrow">ПОВЕДЕНЧЕСКИЕ КЛАСТЕРЫ</p><h3>Типы диалогов</h3><div class="cluster-list">${clusters.map(([id, count]) => `<div><span class="cluster-dot">${Number(id) + 1}</span><span>Группа ${Number(id) + 1}</span><b>${format(count)} сессий</b></div>`).join('')}</div></article>` : ''}
+    ${clusters.length ? `<article class="panel cluster-panel"><p class="eyebrow">ПОВЕДЕНЧЕСКИЕ КЛАСТЕРЫ</p><h3>Типы общения по метаданным</h3><div class="cluster-list">${clusters.map((cluster, index) => `<div><span class="cluster-dot">${index + 1}</span><section><strong>${escapeHtml(cluster.label)}</strong><small>${escapeHtml(cluster.interpretation)}</small></section><b>${format(cluster.session_count)} сессий</b></div>`).join('')}</div></article>` : ''}
     ${data.umap_image ? `<article class="panel"><p class="eyebrow">КАРТА СХОДСТВА</p><h3>Сессии и их группы</h3><img class="umap" alt="Карта поведенческих кластеров" src="data:image/png;base64,${data.umap_image}"></article>` : ''}
-    ${topics.length ? `<article class="panel"><p class="eyebrow">СЕМАНТИЧЕСКИЕ ТЕМЫ</p><h3>О чём говорят</h3><div class="topic-list">${topics.map((topic, index) => `<div><span>${String(index + 1).padStart(2, '0')}</span><p>${escapeHtml(topic.keywords || '')}</p><b>${format(topic.count)} сессий</b></div>`).join('')}</div></article>` : ''}`
+    ${topics.length ? `<article class="panel topics-panel"><p class="eyebrow">ТЕМЫ ПЕРЕПИСКИ</p><h3>Топ-${topics.length} популярных тем</h3><div class="topic-list">${topics.map((topic, index) => `<section class="topic-row"><div class="topic-heading"><span>${String(index + 1).padStart(2, '0')}</span><strong>${escapeHtml(topic.name)}</strong><b>${format(topic.session_count)} сессий</b></div><details><summary>Показать ${topic.examples.length} примера диалога</summary><div class="topic-examples">${topic.examples.map((example) => `<article><p>${escapeHtml(formatDate(example.date_start))} · ${escapeHtml(example.participants.join(', '))}</p><pre>${escapeHtml(example.text)}</pre></article>`).join('')}</div></details></section>`).join('')}</div></article>` : '<article class="panel"><p class="muted">Не удалось сформировать тематические группы: слишком мало текстовых сессий.</p></article>'}`
 
   results.hidden = false
   results.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -120,5 +119,6 @@ function metric(label, value) { return `<article><span>${label}</span><strong>${
 function format(value) { return Number(value || 0).toLocaleString('ru-RU') }
 function number(value) { return Number.isFinite(Number(value)) ? Number(value).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) : '—' }
 function duration(value) { return value == null ? '—' : `${number(value)} мин` }
+function formatDate(value) { return value ? new Date(value).toLocaleString('ru-RU') : 'Дата неизвестна' }
 function topEntry(values) { const entry = Object.entries(values || {}).sort((a, b) => b[1] - a[1])[0]; return entry ? `${entry[0]} · ${entry[1]}` : '—' }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]) }
